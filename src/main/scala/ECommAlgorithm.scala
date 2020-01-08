@@ -72,8 +72,9 @@ class ECommAlgorithm(val ap: ECommAlgorithmParams)
   override
   def train(sc: SparkContext, data: PreparedData): ECommModel = {
     try {
-      val users = data.users.filter { u => ap.roles.isEmpty || u._2.role.exists(r => ap.roles.contains(r)) }
-      val events = data.events.filter { e => ap.alsModelEvents.isEmpty || ap.alsModelEvents.contains(e.event) }
+      val params = ap
+      val users = data.users.filter { u => params.roles.isEmpty || u._2.role.exists(r => params.roles.contains(r)) }
+      val events = data.events.filter { e => params.alsModelEvents.isEmpty || params.alsModelEvents.contains(e.event) }
       require(!events.take(1).isEmpty,
         s"als events in PreparedData cannot be empty." +
           " Please check if DataSource generates TrainingData" +
@@ -164,7 +165,8 @@ class ECommAlgorithm(val ap: ECommAlgorithmParams)
     userStringIntMap: BiMap[String, Int],
     itemStringIntMap: BiMap[String, Int],
     data: PreparedData): RDD[MLlibRating] = {
-    val events = data.events.filter { e => ap.alsModelEvents.isEmpty || ap.alsModelEvents.contains(e.event)}
+    val params = ap
+    val events = data.events.filter { e => params.alsModelEvents.isEmpty || params.alsModelEvents.contains(e.event)}
     val mllibRatings = events
       .map { r =>
         val user = r.entityId
@@ -205,7 +207,8 @@ class ECommAlgorithm(val ap: ECommAlgorithmParams)
     userStringIntMap: BiMap[String, Int],
     itemStringIntMap: BiMap[String, Int],
     data: PreparedData): Map[Int, Int] = {
-    val events = data.events.filter { e => ap.defaultModelEvents.isEmpty || ap.alsModelEvents.contains(e.event)}
+    val params = ap
+    val events = data.events.filter { e => params.defaultModelEvents.isEmpty || params.alsModelEvents.contains(e.event)}
     // count number of buys
     // (item index, count)
     val buyCountsRDD: RDD[(Int, Int)] = events

@@ -63,16 +63,16 @@ class DataSource(val dsp: DataSourceParams)
     val eventsRDD: RDD[Event] = PEventStore.find(
       appName = dsp.appName,
       entityType = Some("user"),
-      eventNames = Some(List("view", "buy")),
-      // targetEntityType is optional field of an event.
-      targetEntityType = Some(Some("item")))(sc)
+      eventNames = Some(dsp.eventNames.toList))(sc)
       .cache()
 
-    new TrainingData(
+    val d = new TrainingData(
       users = usersRDD,
       items = itemsRDD,
       events = eventsRDD
     )
+    logger.info("WOW " + d)
+    d
   }
 }
 
@@ -92,6 +92,6 @@ class TrainingData(
   override def toString = {
     s"users: [${users.count()} (${users.take(2).toList}...)]" +
     s"items: [${items.map(_._2.count())} (${items.take(2).toList}...)]" +
-    s"viewEvents: [${events.count()}] (${events.take(2).toList}...)"
+    s"events: [${events.count()}] (${events.take(2).toList}...)"
   }
 }

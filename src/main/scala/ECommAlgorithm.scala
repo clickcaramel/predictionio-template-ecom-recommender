@@ -21,6 +21,11 @@ case class ECommAlgorithmParams(
   unseenOnly: Boolean,
   seenEvents: List[String],
   similarEvents: List[String],
+  defaultModelEvents: Set[String],
+  alsModelEvents: Set[String],
+  roles: Set[String] = Set(),
+  entityType: String,
+  targetEntityType: String,
   rank: Int,
   numIterations: Int,
   lambda: Double,
@@ -64,21 +69,23 @@ class ECommAlgorithm(val ap: ECommAlgorithmParams)
 
   override
   def train(sc: SparkContext, data: PreparedData): ECommModel = {
-    require(!data.viewEvents.take(1).isEmpty,
-      s"viewEvents in PreparedData cannot be empty." +
+    val users = data.users.filter { u => ap.roles.isEmpty || u._2.role.exists(r => ap.roles.contains(r)) }
+    val events = data.events.filter { e => ap.alsModelEvents.isEmpty || ap.alsModelEvents.contains(e.event) }
+    require(!events.take(1).isEmpty,
+      s"als events in PreparedData cannot be empty." +
       " Please check if DataSource generates TrainingData" +
       " and Preprator generates PreparedData correctly.")
-    require(!data.users.take(1).isEmpty,
+    require(!users.take(1).isEmpty,
       s"users in PreparedData cannot be empty." +
       " Please check if DataSource generates TrainingData" +
       " and Preprator generates PreparedData correctly.")
-    require(!data.items.take(1).isEmpty,
+    require(!data.items(ap.targetEntityType).take(1).isEmpty,
       s"items in PreparedData cannot be empty." +
       " Please check if DataSource generates TrainingData" +
       " and Preprator generates PreparedData correctly.")
     // create User and item's String ID to integer index BiMap
-    val userStringIntMap = BiMap.stringInt(data.users.keys)
-    val itemStringIntMap = BiMap.stringInt(data.items.keys)
+    val userStringIntMap = BiMap.stringInt(users.keys)
+    val itemStringIntMap = BiMap.stringInt(data.items(ap.targetEntityType).keys)
 
     val mllibRatings: RDD[MLlibRating] = genMLlibRating(
       userStringIntMap = userStringIntMap,
@@ -107,7 +114,7 @@ class ECommAlgorithm(val ap: ECommAlgorithmParams)
     val userFeatures = m.userFeatures.collectAsMap.toMap
 
     // convert ID to Int index
-    val items = data.items.map { case (id, item) =>
+    val items = data.items(ap.targetEntityType).map { case (id, item) =>
       (itemStringIntMap(id), item)
     }
 
@@ -148,19 +155,21 @@ class ECommAlgorithm(val ap: ECommAlgorithmParams)
     userStringIntMap: BiMap[String, Int],
     itemStringIntMap: BiMap[String, Int],
     data: PreparedData): RDD[MLlibRating] = {
-
-    val mllibRatings = data.viewEvents
+    val events = data.events.filter { e => ap.alsModelEvents.isEmpty || ap.alsModelEvents.contains(e.event)}
+    val mllibRatings = events
       .map { r =>
+        val user = r.entityId
+        val item = r.targetEntityId.getOrElse("0")
         // Convert user and item String IDs to Int index for MLlib
-        val uindex = userStringIntMap.getOrElse(r.user, -1)
-        val iindex = itemStringIntMap.getOrElse(r.item, -1)
+        val uindex = userStringIntMap.getOrElse(user, -1)
+        val iindex = itemStringIntMap.getOrElse(item, -1)
 
         if (uindex == -1)
-          logger.info(s"Couldn't convert nonexistent user ID ${r.user}"
+          logger.info(s"Couldn't convert nonexistent user ID ${user}"
             + " to Int index.")
 
         if (iindex == -1)
-          logger.info(s"Couldn't convert nonexistent item ID ${r.item}"
+          logger.info(s"Couldn't convert nonexistent item ID ${item}"
             + " to Int index.")
 
         ((uindex, iindex), 1)
@@ -187,20 +196,23 @@ class ECommAlgorithm(val ap: ECommAlgorithmParams)
     userStringIntMap: BiMap[String, Int],
     itemStringIntMap: BiMap[String, Int],
     data: PreparedData): Map[Int, Int] = {
+    val events = data.events.filter { e => ap.defaultModelEvents.isEmpty || ap.alsModelEvents.contains(e.event)}
     // count number of buys
     // (item index, count)
-    val buyCountsRDD: RDD[(Int, Int)] = data.buyEvents
+    val buyCountsRDD: RDD[(Int, Int)] = events
       .map { r =>
+        val user = r.entityId
+        val item = r.targetEntityId.getOrElse("0")
         // Convert user and item String IDs to Int index
-        val uindex = userStringIntMap.getOrElse(r.user, -1)
-        val iindex = itemStringIntMap.getOrElse(r.item, -1)
+        val uindex = userStringIntMap.getOrElse(user, -1)
+        val iindex = itemStringIntMap.getOrElse(item, -1)
 
         if (uindex == -1)
-          logger.info(s"Couldn't convert nonexistent user ID ${r.user}"
+          logger.info(s"Couldn't convert nonexistent user ID ${user}"
             + " to Int index.")
 
         if (iindex == -1)
-          logger.info(s"Couldn't convert nonexistent item ID ${r.item}"
+          logger.info(s"Couldn't convert nonexistent item ID ${item}"
             + " to Int index.")
 
         (uindex, iindex, 1)
@@ -217,6 +229,13 @@ class ECommAlgorithm(val ap: ECommAlgorithmParams)
 
   override
   def predict(model: ECommModel, query: Query): PredictedResult = {
+    if (
+      query.targetEntityType != ap.targetEntityType ||
+      query.entityType != ap.entityType ||
+      ap.roles.nonEmpty && query.roles.exists(p => p.intersect(ap.roles).isEmpty)
+    ) {
+      return PredictedResult(Array())
+    }
 
     val userFeatures = model.userFeatures
     val productModels = model.productModels
@@ -262,7 +281,7 @@ class ECommAlgorithm(val ap: ECommAlgorithmParams)
 
       if (recentFeatures.isEmpty) {
         logger.info(s"No features vector for recent items ${recentItems}.")
-        predictDefault(
+          predictDefault(
           productModels = productModels,
           query = query,
           whiteList = whiteList,
@@ -299,12 +318,12 @@ class ECommAlgorithm(val ap: ECommAlgorithmParams)
       val seenEvents: Iterator[Event] = try {
         LEventStore.findByEntity(
           appName = ap.appName,
-          entityType = "user",
+          entityType = ap.entityType,
           entityId = query.user,
           eventNames = Some(ap.seenEvents),
-          targetEntityType = Some(Some("item")),
+          targetEntityType = Some(Some(ap.targetEntityType)),
           // set time limit to avoid super long DB access
-          timeout = Duration(200, "millis")
+          timeout = Duration(5000, "millis")
         )
       } catch {
         case e: scala.concurrent.TimeoutException =>

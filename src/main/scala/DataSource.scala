@@ -12,7 +12,7 @@ import org.apache.spark.rdd.RDD
 
 import grizzled.slf4j.Logger
 
-case class DataSourceParams(appName: String) extends Params
+case class DataSourceParams(appName: String, targetEntityTypes: Set[String], eventNames: Set[String]) extends Params
 
 class DataSource(val dsp: DataSourceParams)
   extends PDataSource[TrainingData,
@@ -29,7 +29,7 @@ class DataSource(val dsp: DataSourceParams)
       entityType = "user"
     )(sc).map { case (entityId, properties) =>
       val user = try {
-        User()
+        User(role = properties.getOpt[String]("role"))
       } catch {
         case e: Exception => {
           logger.error(s"Failed to get properties ${properties} of" +
@@ -41,22 +41,24 @@ class DataSource(val dsp: DataSourceParams)
     }.cache()
 
     // create a RDD of (entityID, Item)
-    val itemsRDD: RDD[(String, Item)] = PEventStore.aggregateProperties(
-      appName = dsp.appName,
-      entityType = "item"
-    )(sc).map { case (entityId, properties) =>
-      val item = try {
-        // Assume categories is optional property of item.
-        Item(categories = properties.getOpt[List[String]]("categories"))
-      } catch {
-        case e: Exception => {
-          logger.error(s"Failed to get properties ${properties} of" +
-            s" item ${entityId}. Exception: ${e}.")
-          throw e
-        }
-      }
-      (entityId, item)
-    }.cache()
+    val itemsRDD: Map[String, RDD[(String, Item)]] = dsp.targetEntityTypes.map { entityType =>
+      (entityType, PEventStore.aggregateProperties(
+          appName = dsp.appName,
+          entityType = entityType
+        )(sc).map { case (entityId, properties) =>
+          val item = try {
+            // Assume categories is optional property of item.
+            Item(categories = properties.getOpt[List[String]]("categories"))
+          } catch {
+            case e: Exception => {
+              logger.error(s"Failed to get properties ${properties} of" +
+                s" item ${entityId}. Exception: ${e}.")
+              throw e
+            }
+          }
+          (entityId, item)
+        }.cache())
+    }.toMap
 
     val eventsRDD: RDD[Event] = PEventStore.find(
       appName = dsp.appName,
@@ -66,50 +68,15 @@ class DataSource(val dsp: DataSourceParams)
       targetEntityType = Some(Some("item")))(sc)
       .cache()
 
-    val viewEventsRDD: RDD[ViewEvent] = eventsRDD
-      .filter { event => event.event == "view" }
-      .map { event =>
-        try {
-          ViewEvent(
-            user = event.entityId,
-            item = event.targetEntityId.get,
-            t = event.eventTime.getMillis
-          )
-        } catch {
-          case e: Exception =>
-            logger.error(s"Cannot convert ${event} to ViewEvent." +
-              s" Exception: ${e}.")
-            throw e
-        }
-      }
-
-    val buyEventsRDD: RDD[BuyEvent] = eventsRDD
-      .filter { event => event.event == "buy" }
-      .map { event =>
-        try {
-          BuyEvent(
-            user = event.entityId,
-            item = event.targetEntityId.get,
-            t = event.eventTime.getMillis
-          )
-        } catch {
-          case e: Exception =>
-            logger.error(s"Cannot convert ${event} to BuyEvent." +
-              s" Exception: ${e}.")
-            throw e
-        }
-      }
-
     new TrainingData(
       users = usersRDD,
       items = itemsRDD,
-      viewEvents = viewEventsRDD,
-      buyEvents = buyEventsRDD
+      events = eventsRDD
     )
   }
 }
 
-case class User()
+case class User(role: Option[String] = None)
 
 case class Item(categories: Option[List[String]])
 
@@ -119,14 +86,12 @@ case class BuyEvent(user: String, item: String, t: Long)
 
 class TrainingData(
   val users: RDD[(String, User)],
-  val items: RDD[(String, Item)],
-  val viewEvents: RDD[ViewEvent],
-  val buyEvents: RDD[BuyEvent]
+  val items: Map[String, RDD[(String, Item)]],
+  val events: RDD[Event]
 ) extends Serializable {
   override def toString = {
     s"users: [${users.count()} (${users.take(2).toList}...)]" +
-    s"items: [${items.count()} (${items.take(2).toList}...)]" +
-    s"viewEvents: [${viewEvents.count()}] (${viewEvents.take(2).toList}...)" +
-    s"buyEvents: [${buyEvents.count()}] (${buyEvents.take(2).toList}...)"
+    s"items: [${items.map(_._2.count())} (${items.take(2).toList}...)]" +
+    s"viewEvents: [${events.count()}] (${events.take(2).toList}...)"
   }
 }

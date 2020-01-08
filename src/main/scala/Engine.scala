@@ -6,9 +6,12 @@ import org.apache.predictionio.controller.Engine
 case class Query(
   user: String,
   num: Int,
-  categories: Option[Set[String]],
-  whiteList: Option[Set[String]],
-  blackList: Option[Set[String]]
+  entityType: String = "user",
+  targetEntityType: String = "item",
+  roles: Option[Set[String]] = None,
+  categories: Option[Set[String]] = None,
+  whiteList: Option[Set[String]] = None,
+  blackList: Option[Set[String]] = None
 ) extends Serializable
 
 case class PredictedResult(

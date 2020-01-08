@@ -29,7 +29,7 @@ class DataSource(val dsp: DataSourceParams)
       entityType = "user"
     )(sc).map { case (entityId, properties) =>
       val user = try {
-        User(role = properties.getOpt[String]("role"))
+        User(role = properties.getOpt[String]("role").orElse(Some("user")))
       } catch {
         case e: Exception => {
           logger.error(s"Failed to get properties ${properties} of" +

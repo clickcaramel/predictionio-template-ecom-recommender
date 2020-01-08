@@ -74,9 +74,9 @@ class ECommAlgorithm(val ap: ECommAlgorithmParams)
     try {
       val params = ap
       val users = data.users.filter { u => params.roles.isEmpty || u._2.role.exists(r => params.roles.contains(r)) }
+      val events = data.events.filter { e => (params.alsModelEvents.isEmpty || params.alsModelEvents.contains(e.event)) && e.targetEntityType.contains(params.targetEntityType) }
       require(!events.take(1).isEmpty,
         s"als events in PreparedData cannot be empty." +
-        val events = data.events.filter { e => (params.alsModelEvents.isEmpty || params.alsModelEvents.contains(e.event)) && e.targetEntityType.contains(params.targetEntityType) }
           " Please check if DataSource generates TrainingData" +
           " and Preprator generates PreparedData correctly.")
       require(!users.take(1).isEmpty,

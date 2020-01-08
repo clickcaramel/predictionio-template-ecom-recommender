@@ -175,14 +175,6 @@ class ECommAlgorithm(val ap: ECommAlgorithmParams)
         val uindex = userStringIntMap.getOrElse(user, -1)
         val iindex = itemStringIntMap.getOrElse(item, -1)
 
-        if (uindex == -1)
-          logger.info(s"Couldn't convert nonexistent user ID ${user}"
-            + " to Int index.")
-
-        if (iindex == -1)
-          logger.info(s"Couldn't convert nonexistent item ID ${item}"
-            + " to Int index.")
-
         ((uindex, iindex), 1)
       }
       .filter { case ((u, i), v) =>
@@ -218,14 +210,6 @@ class ECommAlgorithm(val ap: ECommAlgorithmParams)
         // Convert user and item String IDs to Int index
         val uindex = userStringIntMap.getOrElse(user, -1)
         val iindex = itemStringIntMap.getOrElse(item, -1)
-
-        if (uindex == -1)
-          logger.info(s"Couldn't convert nonexistent user ID ${user}"
-            + " to Int index.")
-
-        if (iindex == -1)
-          logger.info(s"Couldn't convert nonexistent item ID ${item}"
-            + " to Int index.")
 
         (uindex, iindex, 1)
       }

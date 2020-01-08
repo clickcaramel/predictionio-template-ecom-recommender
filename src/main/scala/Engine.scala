@@ -5,13 +5,14 @@ import org.apache.predictionio.controller.Engine
 
 case class Query(
   user: String,
-  num: Int,
+  limit: Int,
   entityType: String = "user",
   targetEntityType: String = "item",
   roles: Option[Set[String]] = None,
   categories: Option[Set[String]] = None,
   whiteList: Option[Set[String]] = None,
-  blackList: Option[Set[String]] = None
+  blackList: Option[Set[String]] = None,
+  offset: Int = 0
 ) extends Serializable
 
 case class PredictedResult(

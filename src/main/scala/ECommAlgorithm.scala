@@ -69,83 +69,90 @@ class ECommAlgorithm(val ap: ECommAlgorithmParams)
 
   override
   def train(sc: SparkContext, data: PreparedData): ECommModel = {
-    val users = data.users.filter { u => ap.roles.isEmpty || u._2.role.exists(r => ap.roles.contains(r)) }
-    val events = data.events.filter { e => ap.alsModelEvents.isEmpty || ap.alsModelEvents.contains(e.event) }
-    require(!events.take(1).isEmpty,
-      s"als events in PreparedData cannot be empty." +
-      " Please check if DataSource generates TrainingData" +
-      " and Preprator generates PreparedData correctly.")
-    require(!users.take(1).isEmpty,
-      s"users in PreparedData cannot be empty." +
-      " Please check if DataSource generates TrainingData" +
-      " and Preprator generates PreparedData correctly.")
-    require(!data.items(ap.targetEntityType).take(1).isEmpty,
-      s"items in PreparedData cannot be empty." +
-      " Please check if DataSource generates TrainingData" +
-      " and Preprator generates PreparedData correctly.")
-    // create User and item's String ID to integer index BiMap
-    val userStringIntMap = BiMap.stringInt(users.keys)
-    val itemStringIntMap = BiMap.stringInt(data.items(ap.targetEntityType).keys)
+    try {
+      val users = data.users.filter { u => ap.roles.isEmpty || u._2.role.exists(r => ap.roles.contains(r)) }
+      val events = data.events.filter { e => ap.alsModelEvents.isEmpty || ap.alsModelEvents.contains(e.event) }
+      require(!events.take(1).isEmpty,
+        s"als events in PreparedData cannot be empty." +
+          " Please check if DataSource generates TrainingData" +
+          " and Preprator generates PreparedData correctly.")
+      require(!users.take(1).isEmpty,
+        s"users in PreparedData cannot be empty." +
+          " Please check if DataSource generates TrainingData" +
+          " and Preprator generates PreparedData correctly.")
+      require(!data.items(ap.targetEntityType).take(1).isEmpty,
+        s"items in PreparedData cannot be empty." +
+          " Please check if DataSource generates TrainingData" +
+          " and Preprator generates PreparedData correctly.")
+      // create User and item's String ID to integer index BiMap
+      val userStringIntMap = BiMap.stringInt(users.keys)
+      val itemStringIntMap = BiMap.stringInt(data.items(ap.targetEntityType).keys)
 
-    val mllibRatings: RDD[MLlibRating] = genMLlibRating(
-      userStringIntMap = userStringIntMap,
-      itemStringIntMap = itemStringIntMap,
-      data = data
-    )
+      val mllibRatings: RDD[MLlibRating] = genMLlibRating(
+        userStringIntMap = userStringIntMap,
+        itemStringIntMap = itemStringIntMap,
+        data = data
+      )
 
-    // MLLib ALS cannot handle empty training data.
-    require(!mllibRatings.take(1).isEmpty,
-      s"mllibRatings cannot be empty." +
-      " Please check if your events contain valid user and item ID.")
+      // MLLib ALS cannot handle empty training data.
+      require(!mllibRatings.take(1).isEmpty,
+        s"mllibRatings cannot be empty." +
+          " Please check if your events contain valid user and item ID.")
 
-    // seed for MLlib ALS
-    val seed = ap.seed.getOrElse(System.nanoTime)
+      // seed for MLlib ALS
+      val seed = ap.seed.getOrElse(System.nanoTime)
 
-    // use ALS to train feature vectors
-    val m = ALS.trainImplicit(
-      ratings = mllibRatings,
-      rank = ap.rank,
-      iterations = ap.numIterations,
-      lambda = ap.lambda,
-      blocks = -1,
-      alpha = 1.0,
-      seed = seed)
+      // use ALS to train feature vectors
+      val m = ALS.trainImplicit(
+        ratings = mllibRatings,
+        rank = ap.rank,
+        iterations = ap.numIterations,
+        lambda = ap.lambda,
+        blocks = -1,
+        alpha = 1.0,
+        seed = seed)
 
-    val userFeatures = m.userFeatures.collectAsMap.toMap
+      val userFeatures = m.userFeatures.collectAsMap.toMap
 
-    // convert ID to Int index
-    val items = data.items(ap.targetEntityType).map { case (id, item) =>
-      (itemStringIntMap(id), item)
-    }
-
-    // join item with the trained productFeatures
-    val productFeatures: Map[Int, (Item, Option[Array[Double]])] =
-      items.leftOuterJoin(m.productFeatures).collectAsMap.toMap
-
-    val popularCount = trainDefault(
-      userStringIntMap = userStringIntMap,
-      itemStringIntMap = itemStringIntMap,
-      data = data
-    )
-
-    val productModels: Map[Int, ProductModel] = productFeatures
-      .map { case (index, (item, features)) =>
-        val pm = ProductModel(
-          item = item,
-          features = features,
-          // NOTE: use getOrElse because popularCount may not contain all items.
-          count = popularCount.getOrElse(index, 0)
-        )
-        (index, pm)
+      // convert ID to Int index
+      val items = data.items(ap.targetEntityType).map { case (id, item) =>
+        (itemStringIntMap(id), item)
       }
 
-    new ECommModel(
-      rank = m.rank,
-      userFeatures = userFeatures,
-      productModels = productModels,
-      userStringIntMap = userStringIntMap,
-      itemStringIntMap = itemStringIntMap
-    )
+      // join item with the trained productFeatures
+      val productFeatures: Map[Int, (Item, Option[Array[Double]])] =
+        items.leftOuterJoin(m.productFeatures).collectAsMap.toMap
+
+      val popularCount = trainDefault(
+        userStringIntMap = userStringIntMap,
+        itemStringIntMap = itemStringIntMap,
+        data = data
+      )
+
+      val productModels: Map[Int, ProductModel] = productFeatures
+        .map { case (index, (item, features)) =>
+          val pm = ProductModel(
+            item = item,
+            features = features,
+            // NOTE: use getOrElse because popularCount may not contain all items.
+            count = popularCount.getOrElse(index, 0)
+          )
+          (index, pm)
+        }
+
+      new ECommModel(
+        rank = m.rank,
+        userFeatures = userFeatures,
+        productModels = productModels,
+        userStringIntMap = userStringIntMap,
+        itemStringIntMap = itemStringIntMap
+      )
+    } catch {
+      case ex: Exception => {
+        logger.error("Failed to train the model: " + ex.getLocalizedMessage, ex)
+        new ECommModel(-1, Map(), Map(), BiMap(Map()), BiMap(Map()))
+      }
+    }
   }
 
   /** Generate MLlibRating from PreparedData.
@@ -232,7 +239,8 @@ class ECommAlgorithm(val ap: ECommAlgorithmParams)
     if (
       query.targetEntityType != ap.targetEntityType ||
       query.entityType != ap.entityType ||
-      ap.roles.nonEmpty && query.roles.exists(p => p.intersect(ap.roles).isEmpty)
+      ap.roles.nonEmpty && query.roles.exists(p => p.intersect(ap.roles).isEmpty) ||
+      model.rank < 0
     ) {
       return PredictedResult(Array())
     }
@@ -449,7 +457,7 @@ class ECommAlgorithm(val ap: ECommAlgorithmParams)
       .seq // convert back to sequential collection
 
     val ord = Ordering.by[(Int, Double), Double](_._2).reverse
-    val topScores = getTopN(indexScores, query.num)(ord).toArray
+    val topScores = getTopN(indexScores, query.limit + query.offset)(ord).slice(query.offset, query.offset + query.limit).toArray
 
     topScores
   }
@@ -478,7 +486,7 @@ class ECommAlgorithm(val ap: ECommAlgorithmParams)
       .seq
 
     val ord = Ordering.by[(Int, Double), Double](_._2).reverse
-    val topScores = getTopN(indexScores, query.num)(ord).toArray
+    val topScores = getTopN(indexScores, query.limit + query.offset)(ord).slice(query.offset, query.offset + query.limit).toArray
 
     topScores
   }
@@ -514,7 +522,7 @@ class ECommAlgorithm(val ap: ECommAlgorithmParams)
       .seq // convert back to sequential collection
 
     val ord = Ordering.by[(Int, Double), Double](_._2).reverse
-    val topScores = getTopN(indexScores, query.num)(ord).toArray
+    val topScores = getTopN(indexScores, query.limit + query.offset)(ord).slice(query.offset, query.offset + query.limit).toArray
 
     topScores
   }

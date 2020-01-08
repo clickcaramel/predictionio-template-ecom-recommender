@@ -110,7 +110,7 @@ class ECommAlgorithmTest
       ),
       query = Query(
         user = "u0",
-        num = 5,
+        limit = 5,
         categories = Some(Set("c0")),
         whiteList = None,
         blackList = None),
@@ -132,7 +132,7 @@ class ECommAlgorithmTest
       ),
       query = Query(
         user = "u0",
-        num = 5,
+        limit = 5,
         categories = None,
         whiteList = None,
         blackList = None),
@@ -155,7 +155,7 @@ class ECommAlgorithmTest
       ),
       query = Query(
         user = "u0",
-        num = 5,
+        limit = 5,
         categories = Some(Set("c0")),
         whiteList = None,
         blackList = None),

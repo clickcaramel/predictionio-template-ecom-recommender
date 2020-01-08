@@ -16,6 +16,8 @@ import grizzled.slf4j.Logger
 import scala.collection.mutable.PriorityQueue
 import scala.concurrent.duration.Duration
 
+import collection.JavaConverters._
+
 case class ECommAlgorithmParams(
   appName: String,
   unseenOnly: Boolean,
@@ -239,7 +241,7 @@ class ECommAlgorithm(val ap: ECommAlgorithmParams)
     if (
       query.targetEntityType != ap.targetEntityType ||
       query.entityType != ap.entityType ||
-      ap.roles.nonEmpty && query.roles.exists(p => p.intersect(ap.roles).isEmpty) ||
+      ap.roles.nonEmpty && query.roles.asScala.intersect(ap.roles).isEmpty ||
       model.rank < 0
     ) {
       return PredictedResult(Array())
@@ -249,9 +251,7 @@ class ECommAlgorithm(val ap: ECommAlgorithmParams)
     val productModels = model.productModels
 
     // convert whiteList's string ID to integer index
-    val whiteList: Option[Set[Int]] = query.whiteList.map( set =>
-      set.flatMap(model.itemStringIntMap.get(_))
-    )
+    val whiteList: Set[Int] = query.whiteList.asScala.toSet[String].flatMap(model.itemStringIntMap.get)
 
     val finalBlackList: Set[Int] = genBlackList(query = query)
       // convert seen Items list from String ID to interger Index
@@ -385,7 +385,7 @@ class ECommAlgorithm(val ap: ECommAlgorithmParams)
 
     // combine query's blackList,seenItems and unavailableItems
     // into final blackList.
-    query.blackList.getOrElse(Set[String]()) ++ seenItems ++ unavailableItems
+    query.blackList.asScala.toSet ++ seenItems ++ unavailableItems
   }
 
   /** Get recent events of the user on items for recommending similar items */
@@ -433,7 +433,7 @@ class ECommAlgorithm(val ap: ECommAlgorithmParams)
     userFeature: Array[Double],
     productModels: Map[Int, ProductModel],
     query: Query,
-    whiteList: Option[Set[Int]],
+    whiteList: Set[Int],
     blackList: Set[Int]
   ): Array[(Int, Double)] = {
     val indexScores: Map[Int, Double] = productModels.par // convert to parallel collection
@@ -442,7 +442,7 @@ class ECommAlgorithm(val ap: ECommAlgorithmParams)
         isCandidateItem(
           i = i,
           item = pm.item,
-          categories = query.categories,
+          categories = query.categories.asScala.toSet,
           whiteList = whiteList,
           blackList = blackList
         )
@@ -466,7 +466,7 @@ class ECommAlgorithm(val ap: ECommAlgorithmParams)
   def predictDefault(
     productModels: Map[Int, ProductModel],
     query: Query,
-    whiteList: Option[Set[Int]],
+    whiteList: Set[Int],
     blackList: Set[Int]
   ): Array[(Int, Double)] = {
     val indexScores: Map[Int, Double] = productModels.par // convert back to sequential collection
@@ -474,7 +474,7 @@ class ECommAlgorithm(val ap: ECommAlgorithmParams)
         isCandidateItem(
           i = i,
           item = pm.item,
-          categories = query.categories,
+          categories = query.categories.asScala.toSet,
           whiteList = whiteList,
           blackList = blackList
         )
@@ -496,7 +496,7 @@ class ECommAlgorithm(val ap: ECommAlgorithmParams)
     recentFeatures: Vector[Array[Double]],
     productModels: Map[Int, ProductModel],
     query: Query,
-    whiteList: Option[Set[Int]],
+    whiteList: Set[Int],
     blackList: Set[Int]
   ): Array[(Int, Double)] = {
     val indexScores: Map[Int, Double] = productModels.par // convert to parallel collection
@@ -505,7 +505,7 @@ class ECommAlgorithm(val ap: ECommAlgorithmParams)
         isCandidateItem(
           i = i,
           item = pm.item,
-          categories = query.categories,
+          categories = query.categories.asScala.toSet,
           whiteList = whiteList,
           blackList = blackList
         )
@@ -580,20 +580,19 @@ class ECommAlgorithm(val ap: ECommAlgorithmParams)
   def isCandidateItem(
     i: Int,
     item: Item,
-    categories: Option[Set[String]],
-    whiteList: Option[Set[Int]],
+    categories: Set[String],
+    whiteList: Set[Int],
     blackList: Set[Int]
   ): Boolean = {
     // can add other custom filtering here
-    whiteList.map(_.contains(i)).getOrElse(true) &&
+    (whiteList.isEmpty || whiteList.contains(i)) &&
     !blackList.contains(i) &&
     // filter categories
-    categories.map { cat =>
-      item.categories.map { itemCat =>
+    (categories.isEmpty || item.categories.map { itemCat =>
         // keep this item if has ovelap categories with the query
-        !(itemCat.toSet.intersect(cat).isEmpty)
+        !(itemCat.toSet.intersect(categories).isEmpty)
       }.getOrElse(false) // discard this item if it has no categories
-    }.getOrElse(true)
+    )
 
   }
 

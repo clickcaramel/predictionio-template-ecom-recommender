@@ -8,10 +8,10 @@ case class Query(
   limit: Int,
   entityType: String = "user",
   targetEntityType: String = "item",
-  roles: Option[Set[String]] = None,
-  categories: Option[Set[String]] = None,
-  whiteList: Option[Set[String]] = None,
-  blackList: Option[Set[String]] = None,
+  roles: java.util.Set[String] = new java.util.HashSet(),
+  categories: java.util.Set[String] = new java.util.HashSet(),
+  whiteList: java.util.Set[String] = new java.util.HashSet(),
+  blackList: java.util.Set[String] = new java.util.HashSet(),
   offset: Int = 0
 ) extends Serializable
 

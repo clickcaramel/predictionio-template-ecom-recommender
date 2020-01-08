@@ -5,6 +5,8 @@ import org.scalatest.Matchers
 import org.apache.predictionio.data.storage.{BiMap, Event}
 import org.apache.spark.mllib.recommendation.{Rating => MLlibRating}
 
+import collection.JavaConverters._
+
 class ECommAlgorithmTest
   extends FlatSpec with EngineTestSparkContext with Matchers {
 
@@ -111,10 +113,8 @@ class ECommAlgorithmTest
       query = Query(
         user = "u0",
         limit = 5,
-        categories = Some(Set("c0")),
-        whiteList = None,
-        blackList = None),
-      whiteList = None,
+        categories = Set("c0").asJava),
+      whiteList = Set(),
       blackList = Set()
     )
 
@@ -132,11 +132,8 @@ class ECommAlgorithmTest
       ),
       query = Query(
         user = "u0",
-        limit = 5,
-        categories = None,
-        whiteList = None,
-        blackList = None),
-      whiteList = None,
+        limit = 5),
+      whiteList = Set(),
       blackList = Set()
     )
 
@@ -156,10 +153,8 @@ class ECommAlgorithmTest
       query = Query(
         user = "u0",
         limit = 5,
-        categories = Some(Set("c0")),
-        whiteList = None,
-        blackList = None),
-      whiteList = None,
+        categories = Set("c0").asJava),
+      whiteList = Set(),
       blackList = Set()
     )
 

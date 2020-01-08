@@ -66,13 +66,11 @@ class DataSource(val dsp: DataSourceParams)
       eventNames = Some(dsp.eventNames.toList))(sc)
       .cache()
 
-    val d = new TrainingData(
+    new TrainingData(
       users = usersRDD,
       items = itemsRDD,
       events = eventsRDD
     )
-    logger.info("WOW " + d)
-    d
   }
 }
 

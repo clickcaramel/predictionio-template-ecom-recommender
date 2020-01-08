@@ -74,9 +74,9 @@ class ECommAlgorithm(val ap: ECommAlgorithmParams)
     try {
       val params = ap
       val users = data.users.filter { u => params.roles.isEmpty || u._2.role.exists(r => params.roles.contains(r)) }
-      val events = data.events.filter { e => params.alsModelEvents.isEmpty || params.alsModelEvents.contains(e.event) }
       require(!events.take(1).isEmpty,
         s"als events in PreparedData cannot be empty." +
+        val events = data.events.filter { e => (params.alsModelEvents.isEmpty || params.alsModelEvents.contains(e.event)) && e.targetEntityType.contains(params.targetEntityType) }
           " Please check if DataSource generates TrainingData" +
           " and Preprator generates PreparedData correctly.")
       require(!users.take(1).isEmpty,
@@ -166,7 +166,7 @@ class ECommAlgorithm(val ap: ECommAlgorithmParams)
     itemStringIntMap: BiMap[String, Int],
     data: PreparedData): RDD[MLlibRating] = {
     val params = ap
-    val events = data.events.filter { e => params.alsModelEvents.isEmpty || params.alsModelEvents.contains(e.event)}
+    val events = data.events.filter { e => (params.alsModelEvents.isEmpty || params.alsModelEvents.contains(e.event)) && e.targetEntityType.contains(params.targetEntityType) }
     val mllibRatings = events
       .map { r =>
         val user = r.entityId
@@ -208,7 +208,7 @@ class ECommAlgorithm(val ap: ECommAlgorithmParams)
     itemStringIntMap: BiMap[String, Int],
     data: PreparedData): Map[Int, Int] = {
     val params = ap
-    val events = data.events.filter { e => params.defaultModelEvents.isEmpty || params.alsModelEvents.contains(e.event)}
+    val events = data.events.filter { e => (params.defaultModelEvents.isEmpty || params.defaultModelEvents.contains(e.event)) && e.targetEntityType.contains(params.targetEntityType) }
     // count number of buys
     // (item index, count)
     val buyCountsRDD: RDD[(Int, Int)] = events

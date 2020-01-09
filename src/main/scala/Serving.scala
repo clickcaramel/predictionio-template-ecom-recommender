@@ -8,6 +8,6 @@ class Serving
   override
   def serve(query: Query,
     predictedResults: Seq[PredictedResult]): PredictedResult = {
-    predictedResults.head
+    PredictedResult(predictedResults.map(_.itemScores).toList.fold(List())(_++_))
   }
 }

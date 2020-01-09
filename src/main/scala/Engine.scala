@@ -8,15 +8,15 @@ case class Query(
   limit: Int,
   entityType: String = "user",
   targetEntityType: String = "item",
-  roles: java.util.Set[String] = new java.util.HashSet(),
-  categories: java.util.Set[String] = new java.util.HashSet(),
-  whiteList: java.util.Set[String] = new java.util.HashSet(),
-  blackList: java.util.Set[String] = new java.util.HashSet(),
-  offset: Int = 0
+  roles: java.util.Set[String],
+  categories: java.util.Set[String],
+  whiteList: java.util.Set[String],
+  blackList: java.util.Set[String],
+  offset: Int
 ) extends Serializable
 
 case class PredictedResult(
-  itemScores: Array[ItemScore]
+  itemScores: List[ItemScore]
 ) extends Serializable
 
 case class ItemScore(

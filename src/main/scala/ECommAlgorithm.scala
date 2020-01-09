@@ -231,7 +231,7 @@ class ECommAlgorithm(val ap: ECommAlgorithmParams)
       ap.roles.nonEmpty && query.roles.asScala.intersect(ap.roles).isEmpty ||
       model.rank < 0
     ) {
-      return PredictedResult(Array())
+      return PredictedResult(List())
     }
 
     val userFeatures = model.userFeatures
@@ -259,10 +259,6 @@ class ECommAlgorithm(val ap: ECommAlgorithmParams)
         blackList = finalBlackList
       )
     } else {
-      // the user doesn't have feature vector.
-      // For example, new user is created after model is trained.
-      logger.info(s"No userFeature found for user ${query.user}.")
-
       // check if the user has recent events on some items
       val recentItems: Set[String] = getRecentItems(query)
       val recentList: Set[Int] = recentItems.flatMap (x =>
@@ -275,8 +271,7 @@ class ECommAlgorithm(val ap: ECommAlgorithmParams)
         }.flatten
 
       if (recentFeatures.isEmpty) {
-        logger.info(s"No features vector for recent items ${recentItems}.")
-          predictDefault(
+        predictDefault(
           productModels = productModels,
           query = query,
           whiteList = whiteList,
@@ -301,7 +296,7 @@ class ECommAlgorithm(val ap: ECommAlgorithmParams)
       )
     }
 
-    new PredictedResult(itemScores)
+    new PredictedResult(itemScores.toList)
   }
 
   /** Generate final blackList based on other constraints */
@@ -353,7 +348,7 @@ class ECommAlgorithm(val ap: ECommAlgorithmParams)
         eventNames = Some(Seq("$set")),
         limit = Some(1),
         latest = true,
-        timeout = Duration(200, "millis")
+        timeout = Duration(5000, "millis")
       )
       if (constr.hasNext) {
         constr.next.properties.get[Set[String]]("items")
@@ -389,7 +384,7 @@ class ECommAlgorithm(val ap: ECommAlgorithmParams)
         limit = Some(10),
         latest = true,
         // set time limit to avoid super long DB access
-        timeout = Duration(200, "millis")
+        timeout = Duration(5000, "millis")
       )
     } catch {
       case e: scala.concurrent.TimeoutException =>
@@ -471,6 +466,7 @@ class ECommAlgorithm(val ap: ECommAlgorithmParams)
         (i, pm.count.toDouble)
       }
       .seq
+
 
     val ord = Ordering.by[(Int, Double), Double](_._2).reverse
     val topScores = getTopN(indexScores, query.limit + query.offset)(ord).slice(query.offset, query.offset + query.limit).toArray

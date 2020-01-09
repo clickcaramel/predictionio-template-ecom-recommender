@@ -8,6 +8,7 @@ case class Query(
   limit: Int,
   entityType: String = "user",
   targetEntityType: String = "item",
+  statuses: java.util.Set[String],
   roles: java.util.Set[String],
   categories: java.util.Set[String],
   whiteList: java.util.Set[String],

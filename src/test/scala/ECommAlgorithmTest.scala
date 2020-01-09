@@ -113,6 +113,7 @@ class ECommAlgorithmTest
       query = Query(
         user = "u0",
         limit = 5,
+        statuses = Set[String]().asJava,
         categories = Set("c0").asJava,
         roles = Set[String]().asJava,
         whiteList = Set[String]().asJava,
@@ -138,6 +139,7 @@ class ECommAlgorithmTest
       query = Query(
         user = "u0",
         limit = 5,
+        statuses = Set[String]().asJava,
         categories = Set[String]().asJava,
         roles = Set[String]().asJava,
         whiteList = Set[String]().asJava,
@@ -164,6 +166,7 @@ class ECommAlgorithmTest
       query = Query(
         user = "u0",
         limit = 5,
+        statuses = Set[String]().asJava,
         categories = Set("c0").asJava,
         roles = Set[String]().asJava,
         whiteList = Set[String]().asJava,

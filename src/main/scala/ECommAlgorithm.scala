@@ -424,6 +424,7 @@ class ECommAlgorithm(val ap: ECommAlgorithmParams)
         isCandidateItem(
           i = i,
           item = pm.item,
+          statuses = query.statuses.asScala.toSet,
           categories = query.categories.asScala.toSet,
           whiteList = whiteList,
           blackList = blackList
@@ -456,6 +457,7 @@ class ECommAlgorithm(val ap: ECommAlgorithmParams)
         isCandidateItem(
           i = i,
           item = pm.item,
+          statuses = query.statuses.asScala.toSet,
           categories = query.categories.asScala.toSet,
           whiteList = whiteList,
           blackList = blackList
@@ -488,6 +490,7 @@ class ECommAlgorithm(val ap: ECommAlgorithmParams)
         isCandidateItem(
           i = i,
           item = pm.item,
+          statuses = query.statuses.asScala.toSet,
           categories = query.categories.asScala.toSet,
           whiteList = whiteList,
           blackList = blackList
@@ -563,12 +566,14 @@ class ECommAlgorithm(val ap: ECommAlgorithmParams)
   def isCandidateItem(
     i: Int,
     item: Item,
+    statuses: Set[String],
     categories: Set[String],
     whiteList: Set[Int],
     blackList: Set[Int]
   ): Boolean = {
     // can add other custom filtering here
     (whiteList.isEmpty || whiteList.contains(i)) &&
+    (statuses.isEmpty || item.status.exists(statuses.contains)) &&
     !blackList.contains(i) &&
     // filter categories
     (categories.isEmpty || item.categories.map { itemCat =>

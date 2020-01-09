@@ -23,6 +23,7 @@ class DataSource(val dsp: DataSourceParams)
   override
   def readTraining(sc: SparkContext): TrainingData = {
 
+    logger.info("Started loading users")
     // create a RDD of (entityID, User)
     val usersRDD: RDD[(String, User)] = PEventStore.aggregateProperties(
       appName = dsp.appName,
@@ -39,6 +40,8 @@ class DataSource(val dsp: DataSourceParams)
       }
       (entityId, user)
     }.cache()
+    logger.info("Loaded users")
+    logger.info("Started loading items")
 
     // create a RDD of (entityID, Item)
     val itemsRDD: Map[String, RDD[(String, Item)]] = dsp.targetEntityTypes.map { entityType =>
@@ -62,12 +65,15 @@ class DataSource(val dsp: DataSourceParams)
           (entityId, item)
         }.cache())
     }.toMap
+    logger.info("Loaded items")
+    logger.info("Started loading events")
 
     val eventsRDD: RDD[Event] = PEventStore.find(
       appName = dsp.appName,
       entityType = Some("user"),
       eventNames = Some(dsp.eventNames.toList))(sc)
       .cache()
+    logger.info("Loaded events")
 
     new TrainingData(
       users = usersRDD,

@@ -71,22 +71,11 @@ class ECommAlgorithm(val ap: ECommAlgorithmParams)
 
   override
   def train(sc: SparkContext, data: PreparedData): ECommModel = {
+    logger.info("Started training a model")
     try {
       val params = ap
       val users = data.users.filter { u => params.roles.isEmpty || u._2.role.exists(r => params.roles.contains(r)) }
-      val events = data.events.filter { e => (params.alsModelEvents.isEmpty || params.alsModelEvents.contains(e.event)) && e.targetEntityType.contains(params.targetEntityType) }
-      require(!events.take(1).isEmpty,
-        s"als events in PreparedData cannot be empty." +
-          " Please check if DataSource generates TrainingData" +
-          " and Preprator generates PreparedData correctly.")
-      require(!users.take(1).isEmpty,
-        s"users in PreparedData cannot be empty." +
-          " Please check if DataSource generates TrainingData" +
-          " and Preprator generates PreparedData correctly.")
-      require(!data.items(ap.targetEntityType).take(1).isEmpty,
-        s"items in PreparedData cannot be empty." +
-          " Please check if DataSource generates TrainingData" +
-          " and Preprator generates PreparedData correctly.")
+
       // create User and item's String ID to integer index BiMap
       val userStringIntMap = BiMap.stringInt(users.keys)
       val itemStringIntMap = BiMap.stringInt(data.items(ap.targetEntityType).keys)
@@ -97,14 +86,10 @@ class ECommAlgorithm(val ap: ECommAlgorithmParams)
         data = data
       )
 
-      // MLLib ALS cannot handle empty training data.
-      require(!mllibRatings.take(1).isEmpty,
-        s"mllibRatings cannot be empty." +
-          " Please check if your events contain valid user and item ID.")
-
       // seed for MLlib ALS
       val seed = ap.seed.getOrElse(System.nanoTime)
 
+      logger.info("Started training ALS")
       // use ALS to train feature vectors
       val m = ALS.trainImplicit(
         ratings = mllibRatings,
@@ -114,6 +99,7 @@ class ECommAlgorithm(val ap: ECommAlgorithmParams)
         blocks = -1,
         alpha = 1.0,
         seed = seed)
+      logger.info("Done training ALS")
 
       val userFeatures = m.userFeatures.collectAsMap.toMap
 
@@ -126,11 +112,13 @@ class ECommAlgorithm(val ap: ECommAlgorithmParams)
       val productFeatures: Map[Int, (Item, Option[Array[Double]])] =
         items.leftOuterJoin(m.productFeatures).collectAsMap.toMap
 
+      logger.info("Started training default")
       val popularCount = trainDefault(
         userStringIntMap = userStringIntMap,
         itemStringIntMap = itemStringIntMap,
         data = data
       )
+      logger.info("Done training default")
 
       val productModels: Map[Int, ProductModel] = productFeatures
         .map { case (index, (item, features)) =>
@@ -143,6 +131,7 @@ class ECommAlgorithm(val ap: ECommAlgorithmParams)
           (index, pm)
         }
 
+      logger.info("Done training a model")
       new ECommModel(
         rank = m.rank,
         userFeatures = userFeatures,

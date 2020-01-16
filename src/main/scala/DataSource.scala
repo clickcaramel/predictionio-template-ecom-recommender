@@ -101,7 +101,7 @@ case class Item(
       if (categories.exists(_.nonEmpty)) 1.0 else 0.0,
       if (imageExists) 1.0 else 0.0,
       if (status.exists(s => s == "enabled" || s == "published")) 1.0 else 0.0,
-      Math.min(DateTime.now().toDate.getTime - lastUpdated.toDate.getTime, TimeUnit.DAYS.toMillis(30)) / TimeUnit.DAYS.toMillis(30)
+      1.0 - Math.min(DateTime.now().toDate.getTime - lastUpdated.toDate.getTime, TimeUnit.DAYS.toMillis(30)).toDouble / TimeUnit.DAYS.toMillis(30).toDouble
     )
     scores.fold(0.0)(_+_) / scores.size.toDouble
   }

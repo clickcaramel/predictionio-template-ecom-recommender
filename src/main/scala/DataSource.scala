@@ -50,8 +50,8 @@ class DataSource(val dsp: DataSourceParams)
           entityType = entityType
         )(sc).map { case (entityId, properties) =>
           val item = try {
-            // Assume categories is optional property of item.
             Item(
+              imageExists = properties.getOrElse[Boolean]("imageExists", false),
               categories = properties.getOpt[List[String]]("categories"),
               status = properties.getOpt[String]("status")
             )
@@ -85,7 +85,17 @@ class DataSource(val dsp: DataSourceParams)
 
 case class User(role: Option[String] = None)
 
-case class Item(categories: Option[List[String]], status: Option[String] = None)
+case class Item(imageExists: Boolean = false, categories: Option[List[String]] = None, status: Option[String] = None) {
+  def adjustScore(engineScore: Double): Double = {
+    val scores = List[Double](
+      engineScore,
+      if (categories.exists(_.nonEmpty)) 1.0 else 0.0,
+      if (imageExists) 1.0 else 0.0,
+      if (status.exists(s => s == "enabled" || s == "published")) 1.0 else 0.0
+    )
+    scores.fold(0.0)(_+_) / scores.size.toDouble
+  }
+}
 
 case class ViewEvent(user: String, item: String, t: Long)
 

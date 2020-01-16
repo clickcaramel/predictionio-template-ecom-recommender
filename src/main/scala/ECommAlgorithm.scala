@@ -38,7 +38,7 @@ case class ECommAlgorithmParams(
 case class ProductModel(
   item: Item,
   features: Option[Array[Double]], // features by ALS
-  count: Int // popular count for default score
+  countScore: Double // popular count for default score
 )
 
 class ECommModel(
@@ -118,6 +118,7 @@ class ECommAlgorithm(val ap: ECommAlgorithmParams)
         itemStringIntMap = itemStringIntMap,
         data = data
       )
+      val maxCount = popularCount.values.max.toDouble
       logger.info("Done training default")
 
       val productModels: Map[Int, ProductModel] = productFeatures
@@ -126,7 +127,7 @@ class ECommAlgorithm(val ap: ECommAlgorithmParams)
             item = item,
             features = features,
             // NOTE: use getOrElse because popularCount may not contain all items.
-            count = popularCount.getOrElse(index, 0)
+            countScore = popularCount.getOrElse(index, 0) / maxCount
           )
           (index, pm)
         }
@@ -423,7 +424,7 @@ class ECommAlgorithm(val ap: ECommAlgorithmParams)
         // NOTE: features must be defined, so can call .get
         val s = dotProduct(userFeature, pm.features.get)
         // may customize here to further adjust score
-        (i, s)
+        (i, pm.item.adjustScore(s))
       }
       .filter(_._2 > 0) // only keep items with score > 0
       .seq // convert back to sequential collection
@@ -441,6 +442,17 @@ class ECommAlgorithm(val ap: ECommAlgorithmParams)
     whiteList: Set[Int],
     blackList: Set[Int]
   ): Array[(Int, Double)] = {
+    val candidates = productModels.par
+      .filter { case (i, pm) =>
+        isCandidateItem(
+          i = i,
+          item = pm.item,
+          statuses = query.statuses.asScala.toSet,
+          categories = query.categories.asScala.toSet,
+          whiteList = whiteList,
+          blackList = blackList
+        )
+      }
     val indexScores: Map[Int, Double] = productModels.par // convert back to sequential collection
       .filter { case (i, pm) =>
         isCandidateItem(
@@ -453,8 +465,7 @@ class ECommAlgorithm(val ap: ECommAlgorithmParams)
         )
       }
       .map { case (i, pm) =>
-        // may customize here to further adjust score
-        (i, pm.count.toDouble)
+        (i, pm.item.adjustScore(pm.countScore))
       }
       .seq
 
@@ -491,7 +502,7 @@ class ECommAlgorithm(val ap: ECommAlgorithmParams)
           cosine(rf, pm.features.get)
         }.reduce(_ + _)
         // may customize here to further adjust score
-        (i, s)
+        (i, pm.item.adjustScore(s))
       }
       .filter(_._2 > 0) // keep items with score > 0
       .seq // convert back to sequential collection

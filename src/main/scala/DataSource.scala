@@ -1,16 +1,19 @@
 package org.example.ecommercerecommendation
 
+import java.util.concurrent.TimeUnit
+
 import org.apache.predictionio.controller.PDataSource
 import org.apache.predictionio.controller.EmptyEvaluationInfo
 import org.apache.predictionio.controller.EmptyActualResult
 import org.apache.predictionio.controller.Params
 import org.apache.predictionio.data.storage.Event
 import org.apache.predictionio.data.store.PEventStore
-
 import org.apache.spark.SparkContext
 import org.apache.spark.rdd.RDD
-
 import grizzled.slf4j.Logger
+import org.joda.time.DateTime
+
+import scala.concurrent.duration.Duration
 
 case class DataSourceParams(appName: String, targetEntityTypes: Set[String], eventNames: Set[String]) extends Params
 
@@ -53,7 +56,8 @@ class DataSource(val dsp: DataSourceParams)
             Item(
               imageExists = properties.getOrElse[Boolean]("imageExists", false),
               categories = properties.getOpt[List[String]]("categories"),
-              status = properties.getOpt[String]("status")
+              status = properties.getOpt[String]("status"),
+              lastUpdated = properties.lastUpdated
             )
           } catch {
             case e: Exception => {
@@ -85,13 +89,19 @@ class DataSource(val dsp: DataSourceParams)
 
 case class User(role: Option[String] = None)
 
-case class Item(imageExists: Boolean = false, categories: Option[List[String]] = None, status: Option[String] = None) {
+case class Item(
+     imageExists: Boolean = false,
+     categories: Option[List[String]] = None,
+     status: Option[String] = None,
+     lastUpdated: DateTime = DateTime.now()
+) {
   def adjustScore(engineScore: Double): Double = {
     val scores = List[Double](
       engineScore,
       if (categories.exists(_.nonEmpty)) 1.0 else 0.0,
       if (imageExists) 1.0 else 0.0,
-      if (status.exists(s => s == "enabled" || s == "published")) 1.0 else 0.0
+      if (status.exists(s => s == "enabled" || s == "published")) 1.0 else 0.0,
+      Math.min(DateTime.now().toDate.getTime - lastUpdated.toDate.getTime, TimeUnit.DAYS.toMillis(30)) / TimeUnit.DAYS.toMillis(30)
     )
     scores.fold(0.0)(_+_) / scores.size.toDouble
   }

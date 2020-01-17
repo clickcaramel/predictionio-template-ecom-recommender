@@ -310,7 +310,7 @@ class ECommAlgorithm(val ap: ECommAlgorithmParams)
           eventNames = Some(ap.seenEvents),
           targetEntityType = Some(Some(ap.targetEntityType)),
           // set time limit to avoid super long DB access
-          timeout = Duration(5000, "millis")
+          timeout = Duration(200, "millis")
         )
       } catch {
         case e: scala.concurrent.TimeoutException =>
@@ -345,7 +345,7 @@ class ECommAlgorithm(val ap: ECommAlgorithmParams)
         eventNames = Some(Seq("$set")),
         limit = Some(1),
         latest = true,
-        timeout = Duration(5000, "millis")
+        timeout = Duration(200, "millis")
       )
       if (constr.hasNext) {
         constr.next.properties.get[Set[String]]("items")
@@ -381,7 +381,7 @@ class ECommAlgorithm(val ap: ECommAlgorithmParams)
         limit = Some(10),
         latest = true,
         // set time limit to avoid super long DB access
-        timeout = Duration(5000, "millis")
+        timeout = Duration(200, "millis")
       )
     } catch {
       case e: scala.concurrent.TimeoutException =>

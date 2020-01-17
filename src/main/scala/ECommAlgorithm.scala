@@ -65,7 +65,7 @@ class ECommModel(
 }
 
 class ECommAlgorithm(val ap: ECommAlgorithmParams)
-  extends P2LAlgorithm[PreparedData, ECommModel, Query, PredictedResult] {
+  extends P2LAlgorithm[PreparedData, ECommModel, Queries, PredictedResults] {
 
   @transient lazy val logger = Logger[this.type]
 
@@ -214,6 +214,13 @@ class ECommAlgorithm(val ap: ECommAlgorithmParams)
   }
 
   override
+  def predict(model: ECommModel, queries: Queries): PredictedResults = {
+    val predictedResults = queries.queries.asScala.par.map { q =>
+      predict(model, q)
+    }
+    PredictedResults(predictedResults.toList)
+  }
+
   def predict(model: ECommModel, query: Query): PredictedResult = {
     if (
       query.targetEntityType != ap.targetEntityType ||
@@ -221,7 +228,7 @@ class ECommAlgorithm(val ap: ECommAlgorithmParams)
       ap.roles.nonEmpty && query.roles.asScala.intersect(ap.roles).isEmpty ||
       model.rank < 0
     ) {
-      return PredictedResult(List())
+      return PredictedResult(query.id, List())
     }
 
     val userFeatures = model.userFeatures
@@ -286,7 +293,7 @@ class ECommAlgorithm(val ap: ECommAlgorithmParams)
       )
     }
 
-    new PredictedResult(itemScores.toList)
+    new PredictedResult(query.id, itemScores.toList)
   }
 
   /** Generate final blackList based on other constraints */

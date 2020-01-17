@@ -3,7 +3,12 @@ package org.example.ecommercerecommendation
 import org.apache.predictionio.controller.EngineFactory
 import org.apache.predictionio.controller.Engine
 
+case class Queries(
+  queries: java.util.List[Query]
+) extends Serializable
+
 case class Query(
+  id: String = "",
   user: String,
   limit: Int,
   entityType: String = "user",
@@ -16,7 +21,12 @@ case class Query(
   offset: Int
 ) extends Serializable
 
+case class PredictedResults(
+  results: List[PredictedResult]
+) extends Serializable
+
 case class PredictedResult(
+  id: String,
   itemScores: List[ItemScore]
 ) extends Serializable
 

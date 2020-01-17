@@ -19,7 +19,7 @@ case class DataSourceParams(appName: String, targetEntityTypes: Set[String], eve
 
 class DataSource(val dsp: DataSourceParams)
   extends PDataSource[TrainingData,
-      EmptyEvaluationInfo, Query, EmptyActualResult] {
+      EmptyEvaluationInfo, Queries, EmptyActualResult] {
 
   @transient lazy val logger = Logger[this.type]
 

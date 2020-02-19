@@ -57,7 +57,8 @@ class DataSource(val dsp: DataSourceParams)
               imageExists = properties.getOrElse[Boolean]("imageExists", false),
               categories = properties.getOpt[List[String]]("categories"),
               status = properties.getOpt[String]("status"),
-              lastUpdated = properties.lastUpdated
+              lastUpdated = properties.lastUpdated,
+              reward = properties.getOpt[Double]("reward").getOrElse(0.0)
             )
           } catch {
             case e: Exception => {
@@ -93,7 +94,8 @@ case class Item(
      imageExists: Boolean = false,
      categories: Option[List[String]] = None,
      status: Option[String] = None,
-     lastUpdated: DateTime = DateTime.now()
+     lastUpdated: DateTime = DateTime.now(),
+     reward: Double = 0.0
 ) {
   def adjustScore(engineScore: Double): Double = {
     val scores = List[Double](
@@ -101,7 +103,8 @@ case class Item(
       if (categories.exists(_.nonEmpty)) 1.0 else 0.0,
       if (imageExists) 1.0 else 0.0,
       if (status.exists(s => s == "enabled" || s == "published")) 1.0 else 0.0,
-      1.0 - Math.min(DateTime.now().toDate.getTime - lastUpdated.toDate.getTime, TimeUnit.DAYS.toMillis(30)).toDouble / TimeUnit.DAYS.toMillis(30).toDouble
+      1.0 - Math.min(DateTime.now().toDate.getTime - lastUpdated.toDate.getTime, TimeUnit.DAYS.toMillis(30)).toDouble / TimeUnit.DAYS.toMillis(30).toDouble,
+      reward
     )
     scores.fold(0.0)(_+_) / scores.size.toDouble
   }

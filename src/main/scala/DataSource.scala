@@ -100,7 +100,6 @@ case class Item(
   def adjustScore(engineScore: Double): Double = {
     val scores = List[Double](
       engineScore,
-      if (categories.exists(_.nonEmpty)) 1.0 else 0.0,
       if (imageExists) 1.0 else 0.0,
       if (status.exists(s => s == "enabled" || s == "published")) 1.0 else 0.0,
       1.0 - Math.min(DateTime.now().toDate.getTime - lastUpdated.toDate.getTime, TimeUnit.DAYS.toMillis(30)).toDouble / TimeUnit.DAYS.toMillis(30).toDouble,

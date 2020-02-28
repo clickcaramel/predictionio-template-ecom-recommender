@@ -104,6 +104,7 @@ case class Item(
       if (status.exists(s => s == "enabled" || s == "published")) 1.0 else 0.0,
       1.0 - Math.min(DateTime.now().toDate.getTime - lastUpdated.toDate.getTime, TimeUnit.DAYS.toMillis(30)).toDouble / TimeUnit.DAYS.toMillis(30).toDouble,
       reward,
+      reward,
       reward
     )
     scores.fold(0.0)(_+_) / scores.size.toDouble

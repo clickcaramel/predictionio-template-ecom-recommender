@@ -157,15 +157,17 @@ class ECommAlgorithm(val ap: ECommAlgorithmParams)
     data: PreparedData): RDD[MLlibRating] = {
     val params = ap
     val events = data.events.filter { e => (params.alsModelEvents.isEmpty || params.alsModelEvents.contains(e.event)) && e.targetEntityType.contains(params.targetEntityType) }
-    val mllibRatings = events
-      .map { r =>
+    val eventsTuples: RDD[(String, Event)] = events.flatMap(e => e.targetEntityId.map(id => (id, e)))
+    val joined = eventsTuples.leftOuterJoin(data.items(params.targetEntityType))
+    val mllibRatings = joined
+      .map { case (id, (r: Event, i: Option[Item])) =>
         val user = r.entityId
         val item = r.targetEntityId.getOrElse("0")
         // Convert user and item String IDs to Int index for MLlib
         val uindex = userStringIntMap.getOrElse(user, -1)
         val iindex = itemStringIntMap.getOrElse(item, -1)
-
-        ((uindex, iindex), 1)
+        // adjust the rating based on the reward
+        ((uindex, iindex), 1 * i.map(_.adjustRating(1.0)).getOrElse(0.5))
       }
       .filter { case ((u, i), v) =>
         // keep events with valid user and item index
@@ -430,8 +432,7 @@ class ECommAlgorithm(val ap: ECommAlgorithmParams)
       .map { case (i, pm) =>
         // NOTE: features must be defined, so can call .get
         val s = dotProduct(userFeature, pm.features.get)
-        // may customize here to further adjust score
-        (i, pm.item.adjustScore(s))
+        (i, s)
       }
       .filter(_._2 > 0) // only keep items with score > 0
       .seq // convert back to sequential collection
@@ -472,7 +473,7 @@ class ECommAlgorithm(val ap: ECommAlgorithmParams)
         )
       }
       .map { case (i, pm) =>
-        (i, pm.item.adjustScore(pm.countScore))
+        (i, pm.countScore)
       }
       .seq
 
@@ -509,7 +510,7 @@ class ECommAlgorithm(val ap: ECommAlgorithmParams)
           cosine(rf, pm.features.get)
         }.reduce(_ + _)
         // may customize here to further adjust score
-        (i, pm.item.adjustScore(s))
+        (i, s)
       }
       .filter(_._2 > 0) // keep items with score > 0
       .seq // convert back to sequential collection

@@ -270,23 +270,26 @@ class ECommAlgorithm(val ap: ECommAlgorithmParams)
         productModels.get(i).flatMap { pm => pm.features }
       }
 
-      val moreTopScores = if (recentFeatures.isEmpty) {
-        predictDefault(
-          productModels = productModels,
-          query = query.copy(limit = query.limit - topScores.length),
-          whiteList = whiteList,
-          blackList = finalBlackList
-        )
-      } else {
-        predictSimilar(
+      if (recentFeatures.nonEmpty) {
+        val similarTopScores = predictSimilar(
           recentFeatures = recentFeatures,
           productModels = productModels,
           query = query.copy(limit = query.limit - topScores.length),
           whiteList = whiteList,
           blackList = finalBlackList
         )
+        topScores = topScores ++ similarTopScores
       }
-      topScores = topScores ++ moreTopScores
+
+      if (topScores.length < query.limit) {
+        val defaultTopScores = predictDefault(
+          productModels = productModels,
+          query = query.copy(limit = query.limit - topScores.length),
+          whiteList = whiteList,
+          blackList = finalBlackList
+        )
+        topScores = topScores ++ defaultTopScores
+      }
     }
 
     val itemScores = topScores.map { case (i, s) =>

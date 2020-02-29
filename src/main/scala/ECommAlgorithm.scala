@@ -247,8 +247,7 @@ class ECommAlgorithm(val ap: ECommAlgorithmParams)
       model.userStringIntMap.get(query.user).flatMap { userIndex =>
         userFeatures.get(userIndex)
       }
-
-    val topScores: Array[(Int, Double)] = if (userFeature.isDefined) {
+    var topScores: Array[(Int, Double)] = if (userFeature.isDefined) {
       // the user has feature vector
       predictKnownUser(
         userFeature = userFeature.get,
@@ -258,21 +257,23 @@ class ECommAlgorithm(val ap: ECommAlgorithmParams)
         blackList = finalBlackList
       )
     } else {
+      Array()
+    }
+
+    if (topScores.length < query.limit) {
       // check if the user has recent events on some items
       val recentItems: Set[String] = getRecentItems(query)
       val recentList: Set[Int] = recentItems.flatMap (x =>
         model.itemStringIntMap.get(x))
 
-      val recentFeatures: Vector[Array[Double]] = recentList.toVector
-        // productModels may not contain the requested item
-        .map { i =>
-          productModels.get(i).flatMap { pm => pm.features }
-        }.flatten
+      val recentFeatures: Vector[Array[Double]] = recentList.toVector.flatMap { i =>
+        productModels.get(i).flatMap { pm => pm.features }
+      }
 
-      if (recentFeatures.isEmpty) {
+      val moreTopScores = if (recentFeatures.isEmpty) {
         predictDefault(
           productModels = productModels,
-          query = query,
+          query = query.copy(limit = query.limit - topScores.length),
           whiteList = whiteList,
           blackList = finalBlackList
         )
@@ -280,11 +281,12 @@ class ECommAlgorithm(val ap: ECommAlgorithmParams)
         predictSimilar(
           recentFeatures = recentFeatures,
           productModels = productModels,
-          query = query,
+          query = query.copy(limit = query.limit - topScores.length),
           whiteList = whiteList,
           blackList = finalBlackList
         )
       }
+      topScores = topScores ++ moreTopScores
     }
 
     val itemScores = topScores.map { case (i, s) =>

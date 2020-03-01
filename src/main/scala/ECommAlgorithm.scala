@@ -437,7 +437,7 @@ class ECommAlgorithm(val ap: ECommAlgorithmParams)
       .map { case (i, pm) =>
         // NOTE: features must be defined, so can call .get
         val s = dotProduct(userFeature, pm.features.get)
-        (i, s)
+        (i, pm.item.adjustRating(s))
       }
       .filter(_._2 > 0) // only keep items with score > 0
       .seq // convert back to sequential collection
@@ -478,7 +478,7 @@ class ECommAlgorithm(val ap: ECommAlgorithmParams)
         )
       }
       .map { case (i, pm) =>
-        (i, pm.countScore)
+        (i, pm.item.adjustRating(pm.countScore))
       }
       .seq
 
@@ -514,8 +514,7 @@ class ECommAlgorithm(val ap: ECommAlgorithmParams)
           // pm.features must be defined because of filter logic above
           cosine(rf, pm.features.get)
         }.reduce(_ + _)
-        // may customize here to further adjust score
-        (i, s)
+        (i, pm.item.adjustRating(s))
       }
       .filter(_._2 > 0) // keep items with score > 0
       .seq // convert back to sequential collection

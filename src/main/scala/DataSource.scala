@@ -98,17 +98,14 @@ case class Item(
      reward: Double = 0.0
 ) {
   def adjustRating(engineScore: Double): Double = {
-    val timeScore = 1.0 - Math.min(DateTime.now().toDate.getTime - lastUpdated.toDate.getTime, TimeUnit.DAYS.toMillis(30)).toDouble / TimeUnit.DAYS.toMillis(30).toDouble
+    val timeScore = 1.0 - Math.min(DateTime.now().toDate.getTime - lastUpdated.toDate.getTime, TimeUnit.DAYS.toMillis(90)).toDouble / TimeUnit.DAYS.toMillis(90).toDouble
     val scores = List[Double](
       engineScore,
       if (imageExists) 1.0 else 0.0,
       if (status.exists(s => s == "enabled" || s == "published")) 1.0 else 0.0,
-      timeScore,
-      timeScore,
-      timeScore,
       reward
     )
-    scores.fold(0.0)(_+_) / scores.size.toDouble
+    (timeScore * 5.0 + scores.fold(0.0)(_+_)) / (scores.size.toDouble + 5.0)
   }
 }
 

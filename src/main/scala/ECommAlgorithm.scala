@@ -247,7 +247,7 @@ class ECommAlgorithm(val ap: ECommAlgorithmParams)
       model.userStringIntMap.get(query.user).flatMap { userIndex =>
         userFeatures.get(userIndex)
       }
-    var topScores: Array[(Int, Double)] = if (userFeature.isDefined) {
+    var topScores: Array[(Int, Double)] = if (userFeature.isDefined && query.recentItems.size() <= 0) {
       // the user has feature vector
       predictKnownUser(
         userFeature = userFeature.get,
@@ -376,6 +376,9 @@ class ECommAlgorithm(val ap: ECommAlgorithmParams)
 
   /** Get recent events of the user on items for recommending similar items */
   def getRecentItems(query: Query): Set[String] = {
+    if (query.recentItems.size > 0) {
+      return query.recentItems.asScala
+    }
     // get latest 10 user view item events
     val recentEvents = try {
       LEventStore.findByEntity(

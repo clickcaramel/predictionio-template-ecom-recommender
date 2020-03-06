@@ -18,6 +18,7 @@ case class Query(
   categories: java.util.Set[String],
   whiteList: java.util.Set[String],
   blackList: java.util.Set[String],
+  recentItems: java.util.Set[String],
   offset: Int
 ) extends Serializable
 

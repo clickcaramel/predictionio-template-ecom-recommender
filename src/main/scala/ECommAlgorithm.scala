@@ -377,7 +377,7 @@ class ECommAlgorithm(val ap: ECommAlgorithmParams)
   /** Get recent events of the user on items for recommending similar items */
   def getRecentItems(query: Query): Set[String] = {
     if (query.recentItems != null && query.recentItems.size > 0) {
-      return query.recentItems.asScala
+      return query.recentItems.asScala.toSet
     }
     // get latest 10 user view item events
     val recentEvents = try {

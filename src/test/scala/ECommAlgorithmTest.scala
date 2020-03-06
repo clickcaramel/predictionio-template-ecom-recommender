@@ -2,10 +2,10 @@ package org.example.ecommercerecommendation
 
 import org.scalatest.FlatSpec
 import org.scalatest.Matchers
-
-import org.apache.predictionio.data.storage.BiMap
-
+import org.apache.predictionio.data.storage.{BiMap, Event}
 import org.apache.spark.mllib.recommendation.{Rating => MLlibRating}
+
+import collection.JavaConverters._
 
 class ECommAlgorithmTest
   extends FlatSpec with EngineTestSparkContext with Matchers {
@@ -15,10 +15,15 @@ class ECommAlgorithmTest
     unseenOnly = true,
     seenEvents = List("buy", "view"),
     similarEvents = List("view"),
+    defaultModelEvents = Set("buy"),
+    alsModelEvents = Set("view"),
+    entityType = "user",
+    targetEntityType = "user",
     rank = 10,
     numIterations = 20,
     lambda = 0.01,
-    seed = Some(3)
+    seed = Some(3),
+    roles = Set()
   )
   val algorithm = new ECommAlgorithm(algorithmParams)
 
@@ -40,17 +45,17 @@ class ECommAlgorithmTest
   )
 
   val view = Seq(
-    ViewEvent("u0", "i0", 1000010),
-    ViewEvent("u0", "i1", 1000020),
-    ViewEvent("u0", "i1", 1000020),
-    ViewEvent("u1", "i1", 1000030),
-    ViewEvent("u1", "i2", 1000040)
+    Event(event = "view", entityId = "u0", targetEntityId = Some("i0"), entityType = "user"),
+    Event(event = "view", entityId = "u0", targetEntityId = Some("i1"), entityType = "user"),
+    Event(event = "view", entityId = "u0", targetEntityId = Some("i1"), entityType = "user"),
+    Event(event = "view", entityId = "u1", targetEntityId = Some("i1"), entityType = "user"),
+    Event(event = "view", entityId = "u1", targetEntityId = Some("i2"), entityType = "user")
   )
 
   val buy = Seq(
-    BuyEvent("u0", "i0", 1000020),
-    BuyEvent("u0", "i1", 1000030),
-    BuyEvent("u1", "i1", 1000040)
+    Event(event = "buy", entityId = "u0", targetEntityId = Some("i0"), entityType = "user"),
+    Event(event = "buy", entityId = "u0", targetEntityId = Some("i1"), entityType = "user"),
+    Event(event = "buy", entityId = "u1", targetEntityId = Some("i1"), entityType = "user")
   )
 
 
@@ -58,9 +63,8 @@ class ECommAlgorithmTest
 
     val preparedData = new PreparedData(
       users = sc.parallelize(users.toSeq),
-      items = sc.parallelize(items.toSeq),
-      viewEvents = sc.parallelize(view.toSeq),
-      buyEvents = sc.parallelize(buy.toSeq)
+      items = Map("item" -> sc.parallelize(items.toSeq)),
+      events = sc.parallelize(view ++ buy)
     )
 
     val mllibRatings = algorithm.genMLlibRating(
@@ -82,9 +86,8 @@ class ECommAlgorithmTest
   "ECommAlgorithm.trainDefault()" should "return popular count for each item" in {
     val preparedData = new PreparedData(
       users = sc.parallelize(users.toSeq),
-      items = sc.parallelize(items.toSeq),
-      viewEvents = sc.parallelize(view.toSeq),
-      buyEvents = sc.parallelize(buy.toSeq)
+      items = Map("item" -> sc.parallelize(items.toSeq)),
+      events = sc.parallelize(view ++ buy)
     )
 
     val popCount = algorithm.trainDefault(
@@ -109,11 +112,15 @@ class ECommAlgorithmTest
       ),
       query = Query(
         user = "u0",
-        num = 5,
-        categories = Some(Set("c0")),
-        whiteList = None,
-        blackList = None),
-      whiteList = None,
+        limit = 5,
+        statuses = Set[String]().asJava,
+        categories = Set("c0").asJava,
+        roles = Set[String]().asJava,
+        whiteList = Set[String]().asJava,
+        blackList = Set[String]().asJava,
+        offset = 0
+      ),
+      whiteList = Set(),
       blackList = Set()
     )
 
@@ -131,11 +138,15 @@ class ECommAlgorithmTest
       ),
       query = Query(
         user = "u0",
-        num = 5,
-        categories = None,
-        whiteList = None,
-        blackList = None),
-      whiteList = None,
+        limit = 5,
+        statuses = Set[String]().asJava,
+        categories = Set[String]().asJava,
+        roles = Set[String]().asJava,
+        whiteList = Set[String]().asJava,
+        blackList = Set[String]().asJava,
+        offset = 0
+      ),
+      whiteList = Set(),
       blackList = Set()
     )
 
@@ -154,11 +165,15 @@ class ECommAlgorithmTest
       ),
       query = Query(
         user = "u0",
-        num = 5,
-        categories = Some(Set("c0")),
-        whiteList = None,
-        blackList = None),
-      whiteList = None,
+        limit = 5,
+        statuses = Set[String]().asJava,
+        categories = Set("c0").asJava,
+        roles = Set[String]().asJava,
+        whiteList = Set[String]().asJava,
+        blackList = Set[String]().asJava,
+        offset = 0
+      ),
+      whiteList = Set(),
       blackList = Set()
     )
 

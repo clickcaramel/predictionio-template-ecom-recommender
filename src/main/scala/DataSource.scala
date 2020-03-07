@@ -73,7 +73,7 @@ class DataSource(val dsp: DataSourceParams)
     val q = if (entityType == "product") {
       s"""
         select
-          cast(id as text) as id, 'product/' || id as eventid, '{"categories":[' || (SELECT STRING_AGG('"' || category.id || '"', ',') FROM category JOIN product_category_relation AS pcr ON pcr.category_id = category.id WHERE product.id = pcr.product_id) || '],"status":"' || published_status || '","language":"english","location":"USA","reward":' || product.fee || '}' as properties,
+          cast(id as text) as id, 'product/' || id as eventid, '{"categories":[' || COALESCE((SELECT STRING_AGG('"' || category.id || '"', ',') FROM category JOIN product_category_relation AS pcr ON pcr.category_id = category.id WHERE product.id = pcr.product_id), '') || '],"status":"' || published_status || '","language":"english","location":"USA","reward":' || product.fee || '}' as properties,
           GREATEST(updated_at, created_at) as updated_at
         from product
         where published_status = 'published' and id >= ? and id < ?
@@ -81,14 +81,15 @@ class DataSource(val dsp: DataSourceParams)
     } else if (entityType == "user") {
       s"""
         select
-          cast(id as text) as id, 'user/' || id as eventid, '{"role":"' || role || '"}' as properties, GREATEST(updated_at, created_at) as updated_at
+          cast(id as text) as id, 'user/' || id as eventid, '{"role":"' || role || '","categories":[' || COALESCE((SELECT STRING_AGG('"' || category.id || '"', ',') FROM category JOIN product_category_relation AS pcr ON pcr.category_id = category.id JOIN referral_link AS ref ON ref.product_id = pcr.product_id WHERE ref.owner_id = "user".id), '') || ']}' as properties,
+        GREATEST(updated_at, created_at) as updated_at
         from "user"
         where id >= ? and id < ?
       """.replace("\n", " ")
     } else {
       s"""
         select
-          cast(id as text) as id, 'shop/' || id as eventid, '{"categories":[' || (SELECT STRING_AGG('"' || category.id || '"', ',') FROM category JOIN product_category_relation AS pcr ON pcr.category_id = category.id JOIN product AS product ON pcr.product_id=product.id WHERE product.shop_id = shop.id) || '],"status":"' || status || '","language":"english","location":"USA","reward":' || shop.fee || '}' as properties,
+          cast(id as text) as id, 'shop/' || id as eventid, '{"categories":[' || COALESCE((SELECT STRING_AGG('"' || category.id || '"', ',') FROM category JOIN product_category_relation AS pcr ON pcr.category_id = category.id JOIN product AS product ON pcr.product_id=product.id WHERE product.shop_id = shop.id), '') || '],"status":"' || status || '","language":"english","location":"USA","reward":' || shop.fee || '}' as properties,
           GREATEST(updated_at, created_at) as updated_at
         from shop
         where status in ('enabled', 'disconnected') and id >= ? and id < ?

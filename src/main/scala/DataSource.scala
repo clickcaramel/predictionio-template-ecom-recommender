@@ -73,7 +73,7 @@ class DataSource(val dsp: DataSourceParams)
     val q = if (entityType == "product") {
       s"""
         select
-          cast(id as text) as id, 'product/' || id as eventid, '{"categories":[' || COALESCE((SELECT STRING_AGG('"' || category.id || '"', ',') FROM category JOIN product_category_relation AS pcr ON pcr.category_id = category.id WHERE product.id = pcr.product_id), '') || '],"status":"' || published_status || '","language":"english","location":"USA","reward":' || product.fee || '}' as properties,
+          cast(id as text) as id, 'product/' || id as eventid, '{"boost":' || LEAST(array_length(regexp_split_to_array(trim(title || ' ' || description), E'\\W+',''), 1) / 800.0, 1.0) || ',"categories":[' || COALESCE((SELECT STRING_AGG('"' || category.id || '"', ',') FROM category JOIN product_category_relation AS pcr ON pcr.category_id = category.id WHERE product.id = pcr.product_id), '') || '],"status":"' || published_status || '","language":"english","location":"USA","reward":' || product.fee || '}' as properties,
           GREATEST(updated_at, created_at) as updated_at
         from product
         where published_status = 'published' and id >= ? and id < ?
@@ -81,7 +81,7 @@ class DataSource(val dsp: DataSourceParams)
     } else if (entityType == "user") {
       s"""
         select
-          cast(id as text) as id, 'user/' || id as eventid, '{"role":"' || role || '","categories":[' || COALESCE((SELECT STRING_AGG('"' || category.id || '"', ',') FROM category JOIN product_category_relation AS pcr ON pcr.category_id = category.id JOIN referral_link AS ref ON ref.product_id = pcr.product_id WHERE ref.owner_id = "user".id), '') || ']}' as properties,
+          cast(id as text) as id, 'user/' || id as eventid, '{"boost":0.0,"role":"' || role || '","categories":[' || COALESCE((SELECT STRING_AGG('"' || category.id || '"', ',') FROM category JOIN product_category_relation AS pcr ON pcr.category_id = category.id JOIN referral_link AS ref ON ref.product_id = pcr.product_id WHERE ref.owner_id = "user".id), '') || ']}' as properties,
         GREATEST(updated_at, created_at) as updated_at
         from "user"
         where id >= ? and id < ?
@@ -89,7 +89,7 @@ class DataSource(val dsp: DataSourceParams)
     } else {
       s"""
         select
-          cast(id as text) as id, 'shop/' || id as eventid, '{"categories":[' || COALESCE((SELECT STRING_AGG('"' || category.id || '"', ',') FROM category JOIN product_category_relation AS pcr ON pcr.category_id = category.id JOIN product AS product ON pcr.product_id=product.id WHERE product.shop_id = shop.id), '') || '],"status":"' || status || '","language":"english","location":"USA","reward":' || shop.fee || '}' as properties,
+          cast(id as text) as id, 'shop/' || id as eventid, '{"boost":0.0,"categories":[' || COALESCE((SELECT STRING_AGG('"' || category.id || '"', ',') FROM category JOIN product_category_relation AS pcr ON pcr.category_id = category.id JOIN product AS product ON pcr.product_id=product.id WHERE product.shop_id = shop.id), '') || '],"status":"' || status || '","language":"english","location":"USA","reward":' || shop.fee || '}' as properties,
           GREATEST(updated_at, created_at) as updated_at
         from shop
         where status in ('enabled', 'disconnected') and id >= ? and id < ?
@@ -125,7 +125,8 @@ class DataSource(val dsp: DataSourceParams)
           categories = properties.getOpt[List[String]]("categories"),
           status = properties.getOpt[String]("status"),
           lastUpdated = properties.lastUpdated,
-          reward = properties.getOpt[Double]("reward").getOrElse(0.0)
+          reward = properties.getOpt[Double]("reward").getOrElse(0.0),
+          boost = properties.getOpt[Double]("boost").getOrElse(0.0)
         )
       } catch {
         case e: Exception => {
@@ -146,7 +147,8 @@ case class Item(
      categories: Option[List[String]] = None,
      status: Option[String] = None,
      lastUpdated: DateTime = DateTime.now(),
-     reward: Double = 0.0
+     reward: Double = 0.0,
+     boost: Double = 0.0
 ) {
   def adjustRating(engineScore: Double): Double = {
     val timeScore = 1.0 - Math.min(DateTime.now().toDate.getTime - lastUpdated.toDate.getTime, TimeUnit.DAYS.toMillis(90)).toDouble / TimeUnit.DAYS.toMillis(90).toDouble
@@ -154,9 +156,11 @@ case class Item(
       engineScore,
       if (imageExists) 1.0 else 0.0,
       if (status.exists(s => s == "enabled" || s == "published")) 1.0 else 0.0,
-      reward
+      timeScore,
+      reward,
+      boost
     )
-    (timeScore * 5.0 + scores.fold(0.0)(_+_)) / (scores.size.toDouble + 5.0)
+    scores.fold(0.0)(_+_) / scores.size.toDouble
   }
 }
 

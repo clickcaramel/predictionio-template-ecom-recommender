@@ -73,7 +73,7 @@ class DataSource(val dsp: DataSourceParams)
     val q = if (entityType == "product") {
       s"""
         select
-          cast(id as text) as id, 'product/' || id as eventid, '{"boost":' || LEAST(array_length(regexp_split_to_array(trim(title || ' ' || description), E'\\W+',''), 1) / 800.0, 1.0) || ',"categories":[' || COALESCE((SELECT STRING_AGG('"' || category.id || '"', ',') FROM category JOIN product_category_relation AS pcr ON pcr.category_id = category.id WHERE product.id = pcr.product_id), '') || '],"status":"' || published_status || '","language":"english","location":"USA","reward":' || product.fee || '}' as properties,
+          cast(id as text) as id, 'product/' || id as eventid, '{"boost":' || LEAST(array_length(regexp_split_to_array(trim(title || ' ' || description), E'\\W+',''), 1) / 100.0, 1.0) || ',"categories":[' || COALESCE((SELECT STRING_AGG('"' || category.id || '"', ',') FROM category JOIN product_category_relation AS pcr ON pcr.category_id = category.id WHERE product.id = pcr.product_id), '') || '],"status":"' || published_status || '","language":"english","location":"USA","reward":' || product.fee || '}' as properties,
           GREATEST(updated_at, created_at) as updated_at
         from product
         where published_status = 'published' and id >= ? and id < ?

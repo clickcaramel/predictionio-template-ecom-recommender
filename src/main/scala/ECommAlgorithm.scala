@@ -5,18 +5,16 @@ import org.apache.predictionio.controller.Params
 import org.apache.predictionio.data.storage.BiMap
 import org.apache.predictionio.data.storage.Event
 import org.apache.predictionio.data.store.LEventStore
-
 import org.apache.spark.SparkContext
 import org.apache.spark.mllib.recommendation.ALS
 import org.apache.spark.mllib.recommendation.{Rating => MLlibRating}
 import org.apache.spark.rdd.RDD
-
 import grizzled.slf4j.Logger
 
 import scala.collection.mutable.PriorityQueue
 import scala.concurrent.duration.Duration
-
 import collection.JavaConverters._
+import scala.collection.mutable
 
 case class ECommAlgorithmParams(
   appName: String,
@@ -68,6 +66,7 @@ class ECommAlgorithm(val ap: ECommAlgorithmParams)
   extends P2LAlgorithm[PreparedData, ECommModel, Queries, PredictedResults] {
 
   @transient lazy val logger = Logger[this.type]
+  @transient val seenCache = mutable.WeakHashMap[String, Set[String]]()
 
   override
   def train(sc: SparkContext, data: PreparedData): ECommModel = {
@@ -307,71 +306,47 @@ class ECommAlgorithm(val ap: ECommAlgorithmParams)
   def genBlackList(query: Query): Set[String] = {
     // if unseenOnly is True, get all seen items
     val seenItems: Set[String] = if (ap.unseenOnly) {
-
-      // get all user item events which are considered as "seen" events
-      val seenEvents: Iterator[Event] = try {
-        LEventStore.findByEntity(
-          appName = ap.appName,
-          entityType = ap.entityType,
-          entityId = query.user,
-          eventNames = Some(ap.seenEvents),
-          targetEntityType = Some(Some(ap.targetEntityType)),
-          // set time limit to avoid super long DB access
-          timeout = Duration(200, "millis")
-        )
-      } catch {
-        case e: scala.concurrent.TimeoutException =>
-          logger.error(s"Timeout when read seen events." +
-            s" Empty list is used. ${e}")
-          Iterator[Event]()
-        case e: Exception =>
-          logger.error(s"Error when read seen events: ${e}")
-          throw e
-      }
-
-      seenEvents.map { event =>
-        try {
-          event.targetEntityId.get
+      seenCache.getOrElseUpdate(query.user + "_" + query.targetEntityType, {
+        // get all user item events which are considered as "seen" events
+        val seenEvents: Iterator[Event] = try {
+          LEventStore.findByEntity(
+            appName = ap.appName,
+            entityType = ap.entityType,
+            entityId = query.user,
+            eventNames = Some(ap.seenEvents),
+            targetEntityType = Some(Some(ap.targetEntityType)),
+            // set time limit to avoid super long DB access
+            timeout = Duration(200, "millis")
+          )
         } catch {
-          case e: Exception => {
-            logger.error(s"Can't get targetEntityId of event ${event}.")
+          case e: scala.concurrent.TimeoutException =>
+            logger.error(s"Timeout when read seen events." +
+              s" Empty list is used. ${e}")
+            Iterator[Event]()
+          case e: Exception =>
+            logger.error(s"Error when read seen events: ${e}")
             throw e
-          }
         }
-      }.toSet
+
+
+        seenEvents.map { event =>
+          try {
+            event.targetEntityId.get
+          } catch {
+            case e: Exception => {
+              logger.error(s"Can't get targetEntityId of event ${event}.")
+              throw e
+            }
+          }
+        }.toSet
+      })
     } else {
       Set[String]()
     }
 
-    // get the latest constraint unavailableItems $set event
-    val unavailableItems: Set[String] = try {
-      val constr = LEventStore.findByEntity(
-        appName = ap.appName,
-        entityType = "constraint",
-        entityId = "unavailableItems",
-        eventNames = Some(Seq("$set")),
-        limit = Some(1),
-        latest = true,
-        timeout = Duration(200, "millis")
-      )
-      if (constr.hasNext) {
-        constr.next.properties.get[Set[String]]("items")
-      } else {
-        Set[String]()
-      }
-    } catch {
-      case e: scala.concurrent.TimeoutException =>
-        logger.error(s"Timeout when read set unavailableItems event." +
-          s" Empty list is used. ${e}")
-        Set[String]()
-      case e: Exception =>
-        logger.error(s"Error when read set unavailableItems event: ${e}")
-        throw e
-    }
-
     // combine query's blackList,seenItems and unavailableItems
     // into final blackList.
-    query.blackList.asScala.toSet ++ seenItems ++ unavailableItems
+    query.blackList.asScala.toSet ++ seenItems
   }
 
   /** Get recent events of the user on items for recommending similar items */

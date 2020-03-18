@@ -73,7 +73,7 @@ class DataSource(val dsp: DataSourceParams)
     val q = if (entityType == "product") {
       s"""
         select
-          cast(id as text) as id, 'product/' || id as eventid, '{"boost":' || LEAST(array_length(regexp_split_to_array(trim(title || ' ' || description), E'\\W+',''), 1) / 100.0, 1.0) || ',"categories":[' || COALESCE((SELECT STRING_AGG('"' || category.id || '"', ',') FROM category JOIN product_category_relation AS pcr ON pcr.category_id = category.id WHERE product.id = pcr.product_id), '') || '],"status":"' || published_status || '","language":"english","location":"USA","reward":' || product.fee || '}' as properties,
+          cast(id as text) as id, COALESCE((select avg(rating) from product_review where product_id = product.id), 0.0) rating, 'product/' || id as eventid, '{"boost":' || LEAST(array_length(regexp_split_to_array(trim(title || ' ' || description), E'\\W+',''), 1) / 100.0, 1.0) || ',"categories":[' || COALESCE((SELECT STRING_AGG('"' || category.id || '"', ',') FROM category JOIN product_category_relation AS pcr ON pcr.category_id = category.id WHERE product.id = pcr.product_id), '') || '],"status":"' || published_status || '","language":"english","location":"USA","reward":' || product.fee || '}' as properties,
           GREATEST(updated_at, created_at) as updated_at
         from product
         where published_status = 'published' and id >= ? and id < ?
@@ -126,6 +126,7 @@ class DataSource(val dsp: DataSourceParams)
           status = properties.getOpt[String]("status"),
           lastUpdated = properties.lastUpdated,
           reward = properties.getOpt[Double]("reward").getOrElse(0.0),
+          rating = properties.getOpt[Double]("rating").getOrElse(0.0),
           boost = properties.getOpt[Double]("boost").getOrElse(0.0)
         )
       } catch {
@@ -148,6 +149,7 @@ case class Item(
      status: Option[String] = None,
      lastUpdated: DateTime = DateTime.now(),
      reward: Double = 0.0,
+     rating: Double = 0.0,
      boost: Double = 0.0
 ) {
   def adjustRating(engineScore: Double): Double = {
@@ -158,6 +160,7 @@ case class Item(
       if (status.exists(s => s == "enabled" || s == "published")) 1.0 else 0.0,
       timeScore,
       reward,
+      rating,
       boost
     )
     scores.fold(0.0)(_+_) / scores.size.toDouble
